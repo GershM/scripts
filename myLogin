@@ -1,0 +1,182 @@
+#!/bin/bash
+
+confFile=$(echo ~/.login)
+
+group="dev"
+name="dev"
+
+machine=
+user="root"
+
+add=false
+remove=false
+ssh=false
+list=false
+
+cat << EOD
+
+   _       U  ___ u   ____              _   _
+  |"|       \/"_ \/U /"___|u   ___     | \ |"|
+U | | u     | | | |\| |  _ /  |_"_|   <|  \| |>
+ \| |/__.-,_| |_| | | |_| |    | |    U| |\  |u
+  |_____|\_)-\___/   \____|  U/| |\u   |_| \_|
+  //  \\      \\     _)(|_.-,_|___|_,-.||   \\,-.
+ (_")("_)    (__)   (__)__)\_)-' '-(_/ (_")  (_/
+
+EOD
+function help() {
+    cat << EOD
+Description: Login Helper
+Usage: ./$(basename $0) [OPTIONS] [GROUP] [NAME]
+OPTIONS:
+    -n,     --name [VALUE]  Machine's name in the configuration, [DEFAULT: dev].
+    -g,     --group [VALUE] Set Machines Group, [DEFAULT: dev].
+    -u,     --user [VALUE]  Login User, [DEFAULT: root].
+    -a,     --add           Adding new machine to the configuration file ($confFile).
+    -r,     --remove        Removing machine from configuration file ($confFile).
+    -s,     --ssh [VALUE]    connect connection to the given machine(root).
+    -h,     --help          This Help Page.
+
+EOD
+}
+
+function showList() {
+  echo "Configured Machines:"
+  sort $confFile | awk 'BEGIN{printf("\tGroup\tName\t\tMachine\n\t-------------------------------\n");}{printf("\t%s\t%s\t\t%s\n",$1,$2,$3)}'
+}
+
+function addNewMachine() {
+    while [[ ! $machine ]]; do
+        read -p "Host/IP address: " machine
+    done
+
+    while [[ ! $name ]]; do
+        read -p "Machine Name: " name
+    done
+
+    echo "$group $name $machine $user" >> $confFile
+    echo "Machine Added successfuly"
+}
+
+function removeMachine() {
+    local a=
+    while [[ $a != "Y" && $a != "y" ]]; do
+        read -p "You Sure You Want to Remove machine \"$name\" from \"$group\" Group?(Y/N or y/n) " a
+        if [[ $a == "N" || $a == "n" ]]; then
+           return
+        fi
+    done
+
+    sed -i -e  "/^$group $name/d" $confFile
+    if [[ $? != 0 ]]; then
+        echo "Failed to remove Machine \"$home\" from \"$group\" Group."
+        echo "you can remove it manualy from the \"$confFile\" file."
+        return
+    fi
+    echo "Machine \"$home\" has been removed from \"$group\" Group successfuly."
+}
+
+function sshConnection() {
+    local u=${1}
+    local m=${2}
+
+    if [[ ! $m ]]; then
+        echo "Machine's Host/IP address is Missing."
+        exit 1
+    fi
+
+    if [[ ! $u ]]; then
+        echo "Connection User is Missing."
+        exit 1
+    fi
+
+    ssh $u@$m
+    exit 0
+}
+
+function machineConnection() {
+    echo "Connecting..."
+    local line=$(cat $confFile | grep "^$group $name")
+    local u=$(echo $line| awk '{print $4}')
+    local m=$(echo $line| awk '{print $3}')
+    sshConnection $u $m
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -g|--group)
+      group="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -n|--name)
+      name="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -m|--machine)
+      machine="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -u|--user)
+      user="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -a|--add)
+      add=true
+      name=
+      shift # past value
+      ;;
+    -s|--ssh)
+      ssh=true
+      machine="$2"
+      shift # past value
+      shift # past value
+      ;;
+    -l|--list)
+      list=true
+      shift # past value
+      ;;
+    -r|--remove)
+      remove=true
+      shift # past value
+      ;;
+    -h|--help)
+        help
+        showList
+        exit 0
+      ;;
+    *)
+      group=$1
+      if [[ $2 ]]; then
+          name=$2
+      fi
+      shift
+      shift
+      ;;
+  esac
+done
+
+confExists=true
+if [ ! -f $confFile ]; then
+    echo "Configuration File Dese not exists, Try to add new machine"
+    help
+    confExists=false
+fi
+
+if [[ $list == true && $confExists == true ]]; then
+   showList
+elif [[ $add == true ]]; then
+    addNewMachine
+elif [[ $remove == true && $confExists == true ]]; then
+    removeMachine
+elif [[ $ssh == true ]]; then
+    sshConnection $user $machine
+elif [[ $confExists == true  ]]; then
+    machineConnection
+fi
+
+echo ""
+echo "Thank You for Using this app :)"
